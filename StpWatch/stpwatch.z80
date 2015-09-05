@@ -1,0 +1,1010 @@
+#include	"ti83plus.inc"
+;#include	"mirage.inc"
+	.org	$9D93
+	.db	$BB, $6D
+	RET
+	.db	3
+	.db	%00000000,%00000000	
+	.db	%00000000,%00000000
+	.db	%00000000,%00000000
+	.db	%00000000,%00000000
+	.db	%00000000,%00000000
+	.db	%00000000,%00000000
+	.db	%00000000,%00000000
+	.db	%00000000,%00000000
+	.db	%00000000,%00000000
+	.db	%00000000,%00000000
+	.db	%00000000,%00000000
+	.db	%00000000,%00000000
+	.db	%00000000,%00000000
+	.db	%00000000,%00000000
+	.db	%00000000,%00000000
+	.dw	Done
+	.db	"Stop watch by Brian C", 0
+#define b_call(xxxx) bcall(xxxx)
+#define	DWAIT	IN A, ($10) \ AND %10010000 \ JR	NZ, $-4 
+
+
+
+
+	in	a, (2)
+	and	%00100000
+	jr	nz, start
+
+	bcall(_homeUp)
+	ld	hl, _83text
+	bcall(_PutS)
+loop83:
+	bcall(_GetCSC)
+	cp	skGraph
+	jr	z, start
+	or	a
+	ret	nz
+	jr	loop83
+
+
+
+
+
+
+
+
+
+
+Start:
+
+
+
+intrpt_mask	.equ	%00001000
+
+	b_call(_RunIndicOff)
+	b_call(_ClrLCDFull)
+
+	LD	HL, $0000
+	LD	(CurRow), HL
+	LD	HL, CaliText
+	b_call(_PutS)
+
+
+	DI
+
+
+
+	ld	hl, interrupt
+	ld	de, $8787
+	ld	bc, interrupt_End-interrupt
+	ldir
+
+	
+	LD	HL, $9900
+	LD	DE, $9901
+	LD	BC, 256
+	LD	(HL), $87
+	LDIR
+	
+	LD	A, $99
+	LD	I, A
+	
+	LD	A, intrpt_mask
+	OUT	(3), A
+
+	IN	A, (2)
+	RLA
+	SBC	A, A
+	OUT	($20), A
+
+	
+	IM	2
+	
+	b_call(_ClrLCDFull)
+
+	bcall(_HomeUp)
+	ld	hl, CaliText
+
+
+
+
+
+	LD	HL, $0107
+	LD	(CurRow), HL
+	LD	HL, NameText
+	b_call(_PutS)
+	
+	LD	A, ':'
+	LD	HL, $0A01
+	LD	(CurRow), HL
+	bcall(_PutC)
+	LD	HL, $0701
+	LD	(CurRow), HL
+	bcall(_PutC)
+	LD	HL, $0401
+	LD	(CurRow), HL
+	bcall(_PutC)
+		
+	LD	HL, 0
+	XOR	A
+	LD	(Time), HL
+	LD	(Time + 2), A
+	LD	(SplitNumber), A
+	INC	A
+	LD	(_Flags), A
+
+	xor	a
+	out	($33), a
+	out	($34), a
+	out	($36), a
+	out	($37), a
+	LD	A, $46
+	OUT	($30), A
+
+
+
+
+	LD	A, 2
+	OUT	($31), A
+	LD	A, 1
+	OUT	($32), A
+	
+	EI	
+
+Loop:
+	LD	A, $FD
+	OUT	(1), A
+	NOP
+	NOP
+	nop
+	nop
+	IN	A, (1)
+	BIT	6, A
+	JP	Z, Done
+	ld	a, $FF
+	out	(01), a
+
+	LD	A, (_Flags)
+	BIT	0, A
+	JR	Z, DontClear
+	LD	A, $EF
+	OUT	(1), A
+	NOP
+	NOP
+	nop
+	nop
+	IN	A, (1)
+	BIT	0, A
+	JR	NZ, DontClear
+	ld	a, $FF
+	out	(01), a
+
+	LD	HL, 0
+	XOR	A
+	LD	(Time), HL
+	LD	(Time + 2), A
+
+
+
+DontClear:
+
+	LD	A, $BF
+	OUT	(1), A
+	NOP
+	NOP
+	nop
+	nop
+	IN	A, (1)
+	BIT	7, A
+	CALL	Z, DeleteSplit
+
+	CALL	CopyToCurrent
+SplitRET:
+	CALL	AdjustCurrent
+	
+	ld	a, $FF
+	out	(01), a
+	LD	A, (CurrentTemp + 2)
+	OR	A
+	JR	Z, SkipHours
+
+Hours:
+	CALL	CopyToTemp
+
+	LD	IX, TempTime + 2
+	LD	E, 60
+	LD	BC, 3
+	
+	CALL	XDiv
+	
+	LD	IX, TempTime + 2
+	LD	BC, 3
+	
+	CALL	XDiv
+	
+	LD	IX, TempTime + 1
+	LD	BC, 2
+	LD	E, 100
+
+	CALL	XDiv
+	
+	LD	A, (TempTime)
+	CALL	ConvHex
+
+	CALL	Times_Temp_by_100	
+	CALL	Times_Temp_by_60
+	CALL	Times_Temp_by_60
+	CALL	Sub_Current_by_Temp
+	
+	JR	Minutes	
+
+SkipHours:
+	LD	A, $30
+	PUSH	AF
+	PUSH	AF
+
+Minutes:
+	CALL	CopyToTemp	
+
+	LD	BC, 3
+	LD	E, 60
+	LD	IX, TempTime + 2
+
+	CALL	XDiv
+
+
+	LD	BC, 2
+	LD	IX, TempTime + 1
+	LD	E, 100
+	
+	CALL	XDiv
+	
+
+	LD	A, (TempTime)
+	LD	(There + 1), A
+	CALL	ConvHex
+
+There:	LD	H, 00
+	LD	E, 60
+	CALL	Times_H_by_E
+	
+	LD	(TempTime), HL
+	CALL	Times_Temp_by_100
+
+	CALL	Sub_Current_by_Temp
+
+Seconds:
+	CALL	CopyToTemp
+
+	LD	BC, 2
+	LD	E, 100
+	LD	IX, TempTime + 1
+	
+	CALL	XDiv
+	
+	LD	A, (TempTime)
+	LD	(Here + 1), A
+	CALL	ConvHex
+	
+Here:	LD	H, 00
+	LD	E, 100
+
+	CALL	Times_H_by_E
+	
+	LD	DE, (CurrentTemp)
+	EX	DE, HL
+	OR	A
+	SBC	HL, DE
+
+Mils:
+	LD	A, L
+	CALL	ConvHex
+
+	
+Display:
+	LD	A, (_Flags)
+	BIT	4, A
+	JR	NZ, DisplaySplit
+
+	LD	HL, $0B01
+	LD	(CurRow), HL
+	POP	AF
+	call	myPutC
+	POP	AF
+	call	myPutC
+	
+	LD	A, $08
+	LD	(CurCol), A
+	POP	AF
+	call	myPutC
+	POP	AF
+	call	myPutC
+
+	LD	A, $05
+	LD	(CurCol), A
+	POP	AF
+	call	myPutC
+	POP	AF
+	call	myPutC
+	
+	
+	LD	A, $02
+	LD	(CurCol), A
+	POP	AF
+	call	myPutC
+	POP	AF
+	call	myPutC
+	
+	EI
+
+	LD	A, (_Flags)
+	BIT	2, A
+	JR	NZ, LetsDoASplit
+	
+	JP	Loop
+
+;#######################################
+LetsDoASplit:
+	RES	2, A
+	SET	4, A
+	LD	(_Flags), A
+
+	LD	A, (SplitNumber)
+	CP	4
+	JR	Z, SkipThis
+	INC	A
+	LD	(SplitNumber), A
+SkipThis:
+
+	LD	HL, Split
+	LD	DE, CurrentTemp
+	LD	BC, 3
+	LDIR
+	JP	SplitRET
+	
+
+;#########################################	
+DisplaySplit:
+	RES	4, A	
+	LD	(_Flags), A
+	
+	LD	A, (SplitNumber)
+	ADD	A, 2
+	LD	(CurRow), A
+
+	LD	A, $0B
+	LD	(CurCol), A
+	POP	AF
+	call	myPutC
+	POP	AF
+	call	myPutC
+	
+	LD	A, $08
+	LD	(CurCol), A
+	POP	AF
+	call	myPutC
+	POP	AF
+	call	myPutC
+
+	LD	A, $05
+	LD	(CurCol), A
+	POP	AF
+	call	myPutC
+	POP	AF
+	call	myPutC
+	
+	LD	A, $02
+	LD	(CurCol), A
+	POP	AF
+	call	myPutC
+	POP	AF
+	call	myPutC
+
+
+	LD	A, $0A
+	LD	(CurCol), A
+	LD	A, ':'
+	call	myPutC
+	LD	A, $07
+	LD	(CurCol), A
+	LD	A, ':'
+	call	myPutC
+	LD	A, $04
+	LD	(CurCol), A
+	LD	A, ':'
+	call	myPutC
+	
+	JP	Loop
+	
+	
+;#########################################
+Done:
+	b_call(_ClrLCDFull)
+	b_call(_ClrTxtShd)
+	LD	HL, 0
+	LD	(CurRow), HL
+	RES	donePrgm, (IY + doneFlags)
+	XOR	A
+	OUT	($30), A
+	OUT	($31), A
+	LD	A, %00001011
+	OUT	(3), A
+	IM	1
+	RET
+
+;####################################
+;#####################################
+AdjustCurrent: ;multiply by 100 divide by Delay-1
+
+	CALL	CopyToTemp
+
+	CALL	Times_Temp_by_100
+
+	LD	HL, TempTime
+	LD	DE, CurrentTemp
+	LD	BC, 4
+	LDIR
+	
+	LD	IX, CurrentTemp + 3
+	LD	BC, 4
+	LD	A, 128
+	LD	E, A
+	CALL	XDiv
+	RET
+
+;#################################
+Sub_Current_by_Temp:
+	LD	HL, (CurrentTemp)
+	LD	DE, (TempTime)
+	OR	A
+	SBC	HL, DE
+	LD	(CurrentTemp), HL
+	
+	LD	HL, (CurrentTemp + 2)
+	LD	DE, (TempTime + 2)
+	SBC	HL, DE
+	LD	(CurrentTemp + 2), HL
+	RET
+
+
+
+
+
+
+
+
+
+
+
+;#####################################
+Times_H_by_E:	; output HL = product
+	LD	D, 0
+	LD	L, D
+	LD	B, 8
+TimesLoop:
+	ADD	HL, HL
+	JR	NC, TimesSkip
+	ADD	HL, DE
+TimesSkip:
+	DJNZ	TimesLoop
+	RET	
+
+;#####################################
+Times_Temp_by_60:
+	
+	CALL	CopyToAnother
+	LD	B, 1
+	CALL	MultTempTimeBy2	
+	
+	CALL	AddTempAnother
+	CALL	CopyToAnother
+	
+	LD	B, 2
+	CALL	MultTempTimeBy2
+	
+	CALL	AddTempAnother
+	
+	LD	B, 2
+	CALL	MultTempTimeBy2
+	
+	RET
+
+
+	
+;#######################################
+Times_Temp_by_100:
+
+	CALL	CopyToAnother
+	LD	B, 3
+	CALL	MultTempTimeBy2
+	
+	CALL	CopyToAnother2
+
+	LD	B, 1
+	CALL	MultTempTimeBy2
+
+	CALL	AddTempAnother
+	CALL	AddTempAnother2	
+
+	LD	B, 2
+	CALL	MultTempTimeBy2
+
+	RET
+
+;########################################
+CopyToAnother:
+	LD	HL, TempTime
+	LD	DE, AnotherTemp
+	LD	BC, 4
+	LDIR
+	RET
+
+;######################################3
+CopyToAnother2:
+	LD	HL, TempTime
+	LD	DE, AnotherTemp2
+	LD	BC, 4
+	LDIR
+	RET
+
+;########################################
+MultTempTimeBy2:
+	LD	HL, TempTime
+	SLA	(HL)
+	INC	HL
+	RL	(HL)
+	INC	HL
+	RL	(HL)
+	INC	HL
+	RL	(HL)
+	DJNZ	MultTempTimeBy2
+	RET
+	
+
+;#####################################
+AddTempAnother:
+	LD	HL, (TempTime)
+	LD	DE, (AnotherTemp)
+	ADD	HL, DE
+	LD	(TempTime), HL
+	
+	LD	HL, (TempTime + 2)
+	LD	DE, (AnotherTemp + 2)
+	LD	D, 0
+	ADC	HL, DE
+	LD	(TempTime + 2), HL
+	RET
+
+;#########################################
+AddTempAnother2:
+	LD	HL, (TempTime)
+	LD	DE, (AnotherTemp2)
+	ADD	HL, DE
+	LD	(TempTime), HL
+	
+	LD	HL, (TempTime + 2)
+	LD	DE, (AnotherTemp2 + 2)
+	ADC	HL, DE
+	LD	(TempTime + 2), HL
+	RET
+
+;#######################################
+XDiv:
+	LD	D, 0
+DivLoop:
+	LD	H, D
+	LD	L, (IX)
+	CALL	DivHLByE
+	LD	(IX), L
+	LD	D, A
+	DEC	IX
+	DEC	BC
+	LD	A, B
+	OR	C
+	JR	NZ, DivLoop
+	RET
+	
+DivHLByE:
+	PUSH	BC
+	XOR	A
+	LD	B, 16
+_2Loop:
+	ADD	HL, HL
+	RLA
+	JR	C, OverFlow
+	CP	E
+	JR	C, _2Skip
+OverFlow:
+	SUB	E
+	INC	L
+_2Skip:
+	DJNZ	_2Loop
+	POP	BC
+	RET
+
+
+
+;#######################################
+CopyToTemp:
+	LD	HL, CurrentTemp
+	LD	DE, TempTime
+	LD	BC, 3
+	LDIR
+	RET
+
+;#########################################
+CopyToCurrent:
+	LD	HL, Time
+	LD	DE, CurrentTemp
+	LD	BC, 3
+	LDIR
+	RET
+
+
+;########################################
+ConvHex:
+	POP	HL
+	LD	(SaveRET), HL
+	LD	B, 0
+
+ConvHexLoop:
+	LD	(Temp), A
+	CP	10
+	JR	C, Next
+	INC	B
+	PUSH	BC
+	LD	H, 0
+	LD	L, A
+	LD	E, 10	
+	CALL	DivHLByE
+	PUSH	HL
+	LD	H, L
+	LD	E, 10
+	CALL	Times_H_by_E
+	LD	A, (Temp)
+	SUB	L 
+	POP	HL
+	POP	BC
+	ADD	A, $30
+	PUSH	AF
+	LD	A, L
+	JR	ConvHexLoop
+Next:
+	ADD	A, $30
+	PUSH	AF
+	LD	A, B
+	OR	A
+	JR	NZ, Nextest
+	LD	B, $30
+	PUSH	BC
+Nextest:
+	LD	HL, (SaveRET)
+	PUSH	HL
+	RET
+
+;###########################################
+DeleteSplit:
+	xor	a
+	ld	(splitNumber), a
+	ld	c, $21
+
+
+DeleteRow:
+	DWAIT
+	ld	a, c
+	cp	$2D
+	ret	z
+
+	out	($10), a
+	DWAIT
+	ld	a, $98	;row 24
+	out	($10), a
+	inc	c
+	ld	b, 32
+
+DeleteColumn:
+	DWAIT
+	xor	a
+	out	($11), a
+	djnz	DeleteColumn
+	jr	DeleteRow
+
+
+
+
+;##########################################
+;My Put C
+;Inputs: same
+;Outputs: it puts a c
+;Destroys: af b de hl
+;Remarks: does not have any di's
+;	also does not do any valid pencol checking
+MyPutC:
+	sub	$30
+	ld	e, a
+	sla	a
+	sla	a
+	sla	a
+	sub	e
+	ld	e, a
+	ld	d, 0
+	ld	hl, Numbers
+	add	hl, de
+	ex	de, hl
+	DWAIT
+	xor	a
+	out	($10), a
+	
+	ld	hl, (CurRow)
+	sla	l	;*8
+	sla	l
+	sla	l
+	DWAIT
+	ld	a, $80
+	add	a, l
+	out	($10), a
+	DWAIT
+	ld	a, $20
+	add	a, h
+	out	($10), a
+	ld	b, 7
+
+PutCLoop:
+	DWAIT
+	ld	a, (de)
+	inc	de
+	out	($11), a
+	djnz	PutCLoop
+	DWAIT
+	xor	a
+	out	($11), a
+	ld	hl, CurCol
+	inc	(hl)
+	DWAIT
+	ld	a, 1
+	out	($10), a
+	ret
+	
+
+
+	
+
+
+
+;###########################################
+;###########################################
+NameText:
+	.db	"Brian Coventry", 0
+CaliText:
+	.db	"Calibrating...", 0
+
+_83text:
+	.db	"You need an 84+", 0
+Time:
+	.db	00, 00, 00
+TempTime:
+	.db	00, 00, 00, 00
+CurrentTemp:
+	.db	00, 00, 00, 00
+AnotherTemp:
+	.db	00, 00, 00, 00
+AnotherTemp2:
+	.db	00, 00, 00, 00
+Split:
+	.db	00, 00, 00
+	.db	00, 00, 00
+	.db	00, 00, 00
+	.db	00, 00, 00
+Temp:
+	.db	00
+SaveRET:
+	.dw	0000
+_Flags:	;0Paused? 1pausebutton
+	;2split? 3splitbutton
+	.db	00
+Delay:
+	.db	00
+SplitNumber:
+	.db	00
+
+
+;##########################################
+
+interrupt:
+	EX	AF, AF'
+	EXX
+
+
+	ld	a, intrpt_mask
+	OUT	(3), A
+
+	LD	A, 2
+	OUT	($31), A
+	LD	A, 1
+	OUT	($32), A
+
+
+
+	LD	A, (_Flags)
+	LD	C, A
+	BIT	0, C
+	JR	NZ, Skip
+
+	LD	HL, Time
+	INC	(HL)
+
+	JR	NZ, Skip
+	LD	HL, Time + 1
+	INC	(HL)
+	
+	JR	NZ, Skip
+	LD	HL, Time + 2
+	INC	(HL)
+Skip:
+;checkpause
+
+	LD	A, $BF
+	OUT	(1), A
+	NOP
+	NOP
+	nop
+	nop
+	IN	A, (1)
+	ld	b, a
+	ld	a, $FF
+	out	(01), a
+	ld	a, b
+	
+	BIT	5, A
+	JR	NZ, UnButton
+	
+	BIT	1, C
+	JR	NZ, Skipped
+
+	BIT	0, C
+	JR	NZ, Restart
+	
+	SET	0, C
+	SET	1, C
+	JR	Skipped
+
+Restart:
+	RES	0, C
+	SET	1, C
+	JR	Skipped
+
+UnButton:
+	RES	1, C
+
+Skipped:	
+;checksplit
+
+	BIT	6, A
+	JR	NZ, UnButton2
+	
+	BIT	3, C
+	JR	NZ, Skipped2
+	
+	SET	2, C
+	SET	3, C
+	PUSH	BC
+	
+	LD	HL, Time
+	LD	DE, Split
+	LD	BC, 3
+	LDIR
+	
+	POP	BC
+	JR	Skipped2
+
+UnButton2:
+	RES	3, C
+
+Skipped2:
+	LD	A, C
+	LD	(_Flags), A
+	
+;interrupt stuff done
+
+
+
+	EXX
+	EX	AF, AF'
+	EI
+
+	RET
+Interrupt_End:
+
+;##########################
+;Numbers
+
+Numbers:
+	.db	%00011100
+	.db	%00100010
+	.db	%00100110
+	.db	%00101010
+	.db	%00110010
+	.db	%00100010
+	.db	%00011100
+
+	.db	%00001000
+	.db	%00011000
+	.db	%00001000
+	.db	%00001000
+	.db	%00001000
+	.db	%00001000
+	.db	%00011100
+	
+	.db	%00011100
+	.db	%00100010
+	.db	%00000010
+	.db	%00000100
+	.db	%00001000
+	.db	%00010000
+	.db	%00111110
+
+	.db	%00111110
+	.db	%00000100
+	.db	%00001000
+	.db	%00000100
+	.db	%00000010
+	.db	%00100010
+	.db	%00011100
+
+	.db	%00000100
+	.db	%00001100
+	.db	%00010100
+	.db	%00100100
+	.db	%00111110
+	.db	%00000100
+	.db	%00000100
+
+	.db	%00111110
+	.db	%00100000
+	.db	%00111100
+	.db	%00000010
+	.db	%00000010
+	.db	%00100010
+	.db	%00011100
+
+	.db	%00001100
+	.db	%00010000
+	.db	%00100000
+	.db	%00111100
+	.db	%00100010
+	.db	%00100010
+	.db	%00011100
+	
+	.db	%00111110
+	.db	%00000010
+	.db	%00000100
+	.db	%00001000
+	.db	%00010000
+	.db	%00010000
+	.db	%00010000
+
+	.db	%00011100
+	.db	%00100010
+	.db	%00100010
+	.db	%00011100
+	.db	%00100010
+	.db	%00100010
+	.db	%00011100
+
+	.db	%00011100
+	.db	%00100010
+	.db	%00100010
+	.db	%00011110
+	.db	%00000010
+	.db	%00000100
+	.db	%00011000
+
+	.db	%00000000
+	.db	%00011000
+	.db	%00011000
+	.db	%00000000
+	.db	%00011000
+	.db	%00011000
+	.db	%00000000
+
+
+
+
+.end
+.end
