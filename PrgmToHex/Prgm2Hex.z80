@@ -1,0 +1,296 @@
+#include	"ti83plus.inc"			;General TI-83 Plus include file
+#include	"mirage.inc"			;MirageOS include file
+PrgmAsm	EQU	1				;flag bit for AsmID Flag
+	.org $9D93
+	.db	$BB,$6D				;Compiled AsmPrgm token
+	ret						;So TIOS wont run the program
+	.db	1					;Identifier as MirageOS program
+MirageOSbutton:
+	.db	%00000000,%00000000		;Mirage Program Image
+	.db	%00110011,%00011000
+	.db	%00101010,%10100000
+	.db	%00110011,%00101000
+	.db	%00100010,%10101000
+	.db	%00100010,%10011000
+	.db	%00000000,%00000000
+	.db	%00000000,%00000000
+	.db	%00101011,%10101000
+	.db	%00101010,%00101000
+	.db	%00111011,%00010000
+	.db	%00101010,%00101000
+	.db	%00101011,%10101000
+	.db	%00000000,%00000000
+	.db	%00000000,%00000000
+MirageOSDesc:
+	.db	"Prgm -> Hex Converter",0	;Mirage Program Title
+
+ProgInit:
+	ei	
+	call	clrscreenall			;clear the screen
+	res	DonePrgm,(iy+DoneFlags)		;don't Display 'Done'
+	res	IndicOnly,(iy+IndicFlags)	;turn Off Run Indicator
+	res	AppAutoScroll,(iy+AppFlags)	;no Scroll Screen
+	res	PrgmAsm,(iy+asm_Flag1)		;reset PrgmAsm Flag
+	B_CALL(_ZeroOp1)				;set Op1 to all Zero's
+	ld	a,05					;load 5 into a
+	ld	(Op1),a				;load a Into Op1
+	call	PushOp1				;save Op1
+	jp	FindPrgmNext			;find Next Prgm
+MainLoop:
+	call	clrscreenall			;clear Screen
+	ld	hl,StartInstr			;load Instructions Text
+	B_CALL(_puts)				;display It
+	ld	de,$0000				;set de to 0000
+	ld	(CurRow),de				;load de into the Cursor Location
+	ld	hl,PrgmTokTxt			;load and 'prgm' token into hl
+	B_CALL(_puts)				;display 'prgm' token
+	call	DisplayName				;display the Name of Prgm
+MainGetKey:						
+	B_CALL(_Getkey)				;check For KeyPresses
+	cp	kEnter				;if Enter is Pressed
+	jp	z,CopyData				;decompile the Displayed Prgm
+	cp	kRight				;if R-Arrow is Pressed
+	jp	z,FindPrgmNext			;find Next Prgm
+	cp	kLeft					;if L-Arrow is Pressed
+	jp	z,FindPrgmPrev			;find Prev Prgm
+	cp	kClear				;if Clear is pressed
+	ret	z					;quit
+	cp	kMode					;if Mode is pressed
+	ret	z					;quit
+	jr	MainGetKey				;repeat getkey loop
+CopyData:
+	call	PopOp1				;recall Op1
+	B_CALL(_chkfindsym)			;check If Prgm name in Op1 exists
+	ld	a,b					;load the Arc flag into a
+	or	a					;compare to zero(Unarchived)
+	jp	nz,UnArcPrgm			;if not-zero(Archived) display message
+	ex	de,hl					;swap de and hl
+	ld	c,(hl)				;load the
+	inc	hl					;size bytes
+	ld	b,(hl)				;into bc
+	inc	hl					;increase hl
+	call	CheckAsm				;check if prgm is assembly
+	ld	(SourceAddress),hl		;save the source address
+	ld	(SourceSize),bc			;save the source size
+	B_CALL(_Newline)				;move cursor to next line
+	ld	hl,ProcessTxt			;load the message
+	B_CALL(_puts)				;display it
+	call	FindDestPrgm			;prepare the Destination Prgm
+	ld	de,(DestAddress)			;recall the Destination address
+	ld	hl,(SourceAddress)		;recall the Source address
+	ld	bc,(SourceSize)			;recall the Source Size
+	xor	a					;load 0 into a
+	ld	(CurrentCol),a			;load 0 into the Current Column var
+	bit	PrgmAsm,(iy+asm_Flag1)		;load the Assembly Flag into a
+	or	a					;compare it to zero(Basic)
+	jr	z,DataFillRoutine			;if basic prgm: skip 'AsmPrgm' header 
+	ld	bc,AsmPrgm2Tok			;load 'AsmPrgm' token Address into bc
+	ld	a,(bc)				;load the 1st byte into a
+	ld	(de),a				;load a into the destination address(de) 
+	inc	de					;increase Destination address
+	inc	hl					;increase Source address
+	inc	bc					;increase address to the 2nd byte
+	ld	a,(bc)				;load the 2nd byte into a
+	ld	(de),a				;load a into the destination address(de)
+	inc	de					;increase Destination address
+	inc	bc					;increase to the 'tEnter' token
+	ld	a,(bc)				;load it into a
+	ld	(de),a				;load a into address of de
+	inc	de					;increase Destination address
+	ld	bc,(SourceSize)			;load the Source Size into bc
+DataFillRoutine:
+	ld	(CurSourceAddress),hl		;load hl into CurSource address
+	ld	(CurDestAddress),de		;load de into CurDestintion address
+	ld	a,(hl)				;load byte at hl address into a
+	ld	(CurTokn),a				;load a into the CurTokn var
+	call	StoreToken				;call the StoreToken routine
+	dec	bc					;decrease bc (bytes left)
+	ld	a,b					;load b into a
+	cp	0					;compare a to 0
+	jr	nz,DataFillRoutine		;if b is not zero go to start of loop
+	ld	a,c					;load c into a
+	cp	0					;compare a to 0
+	jr	nz,DataFillRoutine		;if c is not zero go to start of loop
+							;if bc = $0000 task is complete
+	ld	bc,$2F00				;set delay amount
+	call	delayb				;delay for b
+	call	clrscreenall			;clear the screen
+	ld	hl,SuccessTxt			;load Success message
+	B_CALL(_puts)				;display it
+	ld	bc,$8000				;set delay amount
+	call	delayb				;delay for b
+	ret						;return from call
+StoreToken:
+	ld	de,DataTable			;this routine
+	ld	a,(CurTokn)				;takes the tokens
+	ld	h,0					;in the prgm and
+	ld	l,a					;outputs their hex code as tokens
+	add	hl,hl					;a times 2 (h= $00)(l= 2*a)
+	add	hl,de					;hl = Datatable(de) + offset(hl)
+	ld	de,(CurDestAddress)		;load the CurDestAddress into de
+	ld	a,(hl)				;load token from table into a
+	ld	(de),a				;load a into the destination address
+	inc	hl					;increase to the next token in the table
+	inc	de					;increase the Destination address
+	ld	a,(hl)				;load token from table into a
+	ld	(de),a				;load a into the destination address
+	inc	de					;increase destination address
+	ld	a,(CurrentCol)			;load the current column into a
+	inc	a					;move the current column
+	inc	a					;over 2 spaces
+	cp	$0C					;compare the column # to 12
+	call	z,InsertBreak			;if at end of line (col 12) wrap to next
+	ld	(CurrentCol),a			;store the column to the var
+	ld	hl,(CurSourceAddress)		;load the Source Address into hl
+	inc	hl					;increase it
+	ret						;return from call
+InsertBreak:
+	ld	hl,BreakCode			;load address containing 'tEnter' to hl
+	ld	a,(hl)				;load 'tEnter' into a
+	ld	(de),a				;load 'tEnter' into destination address
+	inc	de					;increase de
+	ld	a,0					;load 0 into a
+	ret						;return from call
+CheckAsm:
+	ld	a,(hl)				;load byte at hl address into a
+	cp	$BB					;compare it to $BB (AsmPrgm 1st byte)
+	ret	nz					;return if not assembly
+	inc	hl					;increase address in hl
+	ld	a,(hl)				;load byte at hl address into a
+	cp	$6D					;compare it to $6D (AsmPrgm 2nd byte)
+	ret	nz					;return if not assembly
+	set	PrgmAsm,(iy+asm_Flag1)		;set flag if prgm is Assembly
+	ret						;return from call
+FindPrgmNext:
+	call	PopOp1				;restore Op1
+	B_CALL(_FindAlphaUp)			;search VAT for next prgm
+	call	PushOp1				;save op1
+	jp	MainLoop				;return if no more Prgms
+FindPrgmPrev:
+	call	PopOp1				;restore Op1
+	B_CALL(_FindAlphaDn)			;search VAT for next prgm
+	call	PushOp1				;save Op1
+	jp	MainLoop				;return if no more Prgms
+FindDestPrgm:
+	B_CALL(_ZeroOp1)				;this routine creates/preps
+	ld	hl,DestPrgmName			;the output prgm before
+	rst	20h					;decompiling
+	B_CALL(_ChkFindSym)			;check if dest prgm exists
+	call	nc,DelPrgm				;if prgm exists, del it
+	B_CALL(_ZeroOp1)				;set op1 to all zeros
+	ld	hl,DestPrgmName			;load dest. prgm name to hl
+	ld	de,Op1				;load op1 address into de
+	ld	bc,9					;load 9 into bc
+	ldir						;load increment and repeat
+	ld	hl,(SourceSize)			;load Source Size into hl
+	add	hl,hl					;hl * 2
+	ld	(DestSize),hl			;load hl into DestSize
+	ld	de,(DestSize)			;load DestSize into de
+	ld	a,0C					;load $0C into a
+	B_CALL(_DivHLByA)				;divide hl by a
+	add	hl,de					;add hl and de
+	B_CALL(_CreateProg)			;create prgm of hl size
+	inc	de					;increase de
+	inc	de					;increase de
+	ld	(DestAddress),de			;load de into Dest Address
+	ret						;return from call
+DelPrgm:
+	B_CALL(_delvararc)			;delete the data file
+	ret						;return from call
+UnArcPrgm:
+	ld	de,$0001				;load $0001 into de
+	ld	(CurRow),de				;load de as the Cursor Position
+	ld	hl,ArchivedTxt			;load message into hl 
+	B_CALL(_puts)				;display it
+	B_CALL(_GetKey)				;wait for a KeyPress
+	jp	MainLoop				;go to mainloop
+PushOp1:
+	ld	hl,Op1				;this routine
+	ld	bc,09					;saves Op1 to
+	ld	de,SourcePrgmName			;a memory address.
+	ldir						;load increment and repeat
+	ret						;return from call
+PopOp1:
+	ld	hl,SourcePrgmName			;this routine
+	ld	bc,09					;recalls Op1 from
+	ld	de,Op1				;a memory address.
+	ldir						;load increment and repeat
+	ret						;return from call
+DisplayName:
+	ld	hl,SourcePrgmName+1		;load prgm name into hl
+	B_CALL(_puts)				;display it
+	ret						;return from call
+clrscreenall:
+	B_CALL(_clrLCDFull)			;clear the Display
+	B_CALL(_HomeUp)				;dring homescreen up
+	ret						;return from call
+SourcePrgmName:	.db	0,0,0,0,0,0,0,0,0,0
+SourceAddress:	.db	0,0
+CurSourceAddress:	.db	0,0
+SourceSize:		.db	0,0
+DestPrgmName:	.db	ProgObj,"ZPRGDATA"
+DestAddress:	.db	0,0
+DestSize:		.db	0,0
+CurDestAddress:	.db	0,0
+CurTokn:		.db	0
+CurrentCol:		.db	0
+BreakCode:		.db	tEnter
+Spaces:		.db	"   ",0
+PrgmTokTxt:		.db	"prgm",0
+AsmPrgm2Tok:	.db	$BB,$6C
+BreakCode:		.db	tEnter
+StartInstr:		.db	"                "
+			.db	"                "
+			.db	"                "
+			.db	"                "
+			.db	"                "
+			.db	"                "
+			.db	"Press < or > to "
+			.db	"Select Program ",0
+ArchivedTxt:	.db	"Archived!       ",0
+ProcessTxt:		.db	"----------------"
+			.db	"   Basic Prgm   "
+			.db	"       ->       "
+			.db	"    Hex Data    "
+			.db	"----------------"
+			.db	"                "
+			.db	"                ",0
+SuccessTxt:		.db	"    Success!    "
+			.db	"To View Hex-Code"
+			.db	"Goto Prgm-Edit: "
+			.db	"prgmZPRGMDAT    ",0
+DataTable:		.db	t0,t0,t0,t1,t0,t2,t0,t3,t0,t4,t0,t5,t0,t6,t0,t7
+			.db	t0,t8,t0,t9,t0,tA,t0,tB,t0,tC,t0,tD,t0,tE,t0,tF
+			.db	t1,t0,t1,t1,t1,t2,t1,t3,t1,t4,t1,t5,t1,t6,t1,t7
+			.db	t1,t8,t1,t9,t1,tA,t1,tB,t1,tC,t1,tD,t1,tE,t1,tF
+			.db	t2,t0,t2,t1,t2,t2,t2,t3,t2,t4,t2,t5,t2,t6,t2,t7
+			.db	t2,t8,t2,t9,t2,tA,t2,tB,t2,tC,t2,tD,t2,tE,t2,tF
+			.db	t3,t0,t3,t1,t3,t2,t3,t3,t3,t4,t3,t5,t3,t6,t3,t7
+			.db	t3,t8,t3,t9,t3,tA,t3,tB,t3,tC,t3,tD,t3,tE,t3,tF
+			.db	t4,t0,t4,t1,t4,t2,t4,t3,t4,t4,t4,t5,t4,t6,t4,t7
+			.db	t4,t8,t4,t9,t4,tA,t4,tB,t4,tC,t4,tD,t4,tE,t4,tF
+			.db	t5,t0,t5,t1,t5,t2,t5,t3,t5,t4,t5,t5,t5,t6,t5,t7
+			.db	t5,t8,t5,t9,t5,tA,t5,tB,t5,tC,t5,tD,t5,tE,t5,tF
+			.db	t6,t0,t6,t1,t6,t2,t6,t3,t6,t4,t6,t5,t6,t6,t6,t7
+			.db	t6,t8,t6,t9,t6,tA,t6,tB,t6,tC,t6,tD,t6,tE,t6,tF
+			.db	t7,t0,t7,t1,t7,t2,t7,t3,t7,t4,t7,t5,t7,t6,t7,t7
+			.db	t7,t8,t7,t9,t7,tA,t7,tB,t7,tC,t7,tD,t7,tE,t7,tF
+			.db	t8,t0,t8,t1,t8,t2,t8,t3,t8,t4,t8,t5,t8,t6,t8,t7
+			.db	t8,t8,t8,t9,t8,tA,t8,tB,t8,tC,t8,tD,t8,tE,t8,tF
+			.db	t9,t0,t9,t1,t9,t2,t9,t3,t9,t4,t9,t5,t9,t6,t9,t7
+			.db	t9,t8,t9,t9,t9,tA,t9,tB,t9,tC,t9,tD,t9,tE,t9,tF
+			.db	tA,t0,tA,t1,tA,t2,tA,t3,tA,t4,tA,t5,tA,t6,tA,t7
+			.db	tA,t8,tA,t9,tA,tA,tA,tB,tA,tC,tA,tD,tA,tE,tA,tF
+			.db	tB,t0,tB,t1,tB,t2,tB,t3,tB,t4,tB,t5,tB,t6,tB,t7
+			.db	tB,t8,tB,t9,tB,tA,tB,tB,tB,tC,tB,tD,tB,tE,tB,tF
+			.db	tC,t0,tC,t1,tC,t2,tC,t3,tC,t4,tC,t5,tC,t6,tC,t7
+			.db	tC,t8,tC,t9,tC,tA,tC,tB,tC,tC,tC,tD,tC,tE,tC,tF
+			.db	tD,t0,tD,t1,tD,t2,tD,t3,tD,t4,tD,t5,tD,t6,tD,t7
+			.db	tD,t8,tD,t9,tD,tA,tD,tB,tD,tC,tD,tD,tD,tE,tD,tF
+			.db	tE,t0,tE,t1,tE,t2,tE,t3,tE,t4,tE,t5,tE,t6,tE,t7
+			.db	tE,t8,tE,t9,tE,tA,tE,tB,tE,tC,tE,tD,tE,tE,tE,tF
+			.db	tF,t0,tF,t1,tF,t2,tF,t3,tF,t4,tF,t5,tF,t6,tF,t7
+			.db	tF,t8,tF,t9,tF,tA,tF,tB,tF,tC,tF,tD,tF,tE,tF,tF,0
+
+.end
+END

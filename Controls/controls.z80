@@ -1,0 +1,403 @@
+;Controls Plus
+;Written By: Peter Jedraszczak
+;http://petershomepage.tripod.com
+;pbjiam@hotmail.com
+;83+ ASM For Mirage OS
+;-------------------------------------------------------------------------------------------
+;You may use this source for personal purpose only. You may not redistribute this program in ;any modified way unless with persmission from pbjiam@hotmail.com
+;-------------------------------------------------------------------------------------------
+#define curcont    saferam1
+#define xcoord     saferam1+5h
+#define ycoord     saferam1+10h
+#define curlock		4
+#define LCDINSTPORT 10h
+
+#include	"ti83plus.inc"			;General TI-83 Plus include file
+#include	"mirage.inc"			;MirageOS include file
+	.org	$9d93				
+	.db	$BB,$6D				;Compiled AsmPrgm token
+	ret					;So TIOS wont run the program
+	.db	1	
+button:	
+	.db	%01111000,%00111100		;15x15 button
+	.db	%01100000,%00100100
+	.db	%01100000,%00111100
+	.db	%01111000,%00100000
+	.db	%00000000,%00100000
+	.db	%00000000,%00000000
+	.db	%00000000,%00000000
+	.db	%00000000,%00000000
+	.db	%11111111,%11111111
+	.db	%11111111,%11111111
+	.db	%00000000,%00000000
+	.db	%00000000,%00000000
+	.db	%00000000,%00000000
+	.db	%00000000,%00000000
+	.db	%00000000,%00000000
+description:
+	.db	"Controls Plus",0	
+start:	
+	bcall(_homeup)
+	bcall(_clrLCDfull)
+	ld hl,0010
+	ld (pencol),hl
+	ld hl,title
+	bcall(_vputs)
+	ld hl,0007
+	ld a,10
+	ld (pencol),a
+	ld (penrow),hl
+	ld hl,author
+	bcall(_vputs)
+	ld (pencol),a
+	ld a,10
+	ld hl,0014
+	ld (penrow),hl
+	ld hl,lastname
+	bcall(_vputs)
+	bcall(_getkey)
+back:
+	bcall(_clrLCDfull)
+	ld hl,0000
+	ld (penrow),hl
+	ld a,5
+	ld (pencol),a
+	ld hl,title
+	bcall(_vputs)
+	ld hl,0006
+	ld (penrow),hl
+	ld a,0
+	ld (pencol),a
+	ld hl,option1
+	bcall(_vputs)
+	ld hl,12
+	ld (penrow),hl
+	ld (pencol),a
+	ld a,0
+	ld hl,option2
+	bcall(_vputs)
+	ld hl,18
+	ld (penrow),hl
+	ld a,0
+	ld (pencol),a
+	ld hl,option3
+	bcall(_vputs)
+	ld hl,0000
+	ld (pencol),hl
+	ld a,24
+	ld (penrow),a
+	ld hl,option4
+	bcall(_vputs)
+	ld hl,0000
+	ld (pencol),hl
+	ld a,30
+	ld (penrow),a
+	ld hl,option5
+	bcall(_vputs)
+	ld hl,0000
+	ld (pencol),hl
+	ld a,36
+	ld (penrow),a
+	ld hl,option6
+	bcall(_vputs)
+	ld hl,0000
+	ld (pencol),hl
+	ld a,42
+	ld (penrow),a
+	ld hl,battdial
+	bcall(_vputs)
+	ld hl,0000
+	ld (pencol),hl
+	ld a,0048
+	ld (penrow),a
+	ld hl,faker
+	bcall(_vputs)
+        jp getkey
+	
+getkey:
+        bcall(_getkey)
+	cp kclear
+	jp z,quiter
+        cp k1
+	jp z,inverse
+	cp k2
+	jp z,cursorr
+	cp k3
+	jp z,indicator
+	cp k4
+	jp z,fakeclear
+	cp k5
+	jp z,shutdown
+	cp k6
+        jp z,contraster
+	cp k7
+	jp z,battcheck
+	cp k8
+	jp z,memdel
+        jp getkey
+memdel:
+	bcall(_clrLCDfull)
+	bcall(_homeup)
+	set curable, (iy+curflags)
+	jp memloop
+memloop:	
+	bcall(_getkey)
+	cp kclear
+	jp z,menux
+	ld hl,0003
+	ld (currow),hl
+	ld a,2
+	ld (curcol),a
+	bcall(_clrLCDfull)
+	ld hl,teacher
+	bcall(_puts)
+	bcall(_homeup)
+	jp memloop
+menux:
+	res curable, (iy+curflags)
+	bcall(_clrLCDfull)
+	jp back
+cursorr:
+	bit curlock, (iy+curflags)
+	jp z,oncur
+	res curlock, (iy+curflags)
+	ld hl,0000
+	ld (currow),hl
+	ld a,0
+	ld (curcol),a
+	bcall(_clrLCDfull)
+	ld hl,cursoff
+	jp jump
+oncur:
+	set curlock, (iy+curflags)
+	bcall(_clrLCDfull)
+	ld hl,0000
+	ld (currow),hl
+	ld a,0
+	ld (curcol),a
+	ld hl,curson
+	jp jump
+battcheck:
+	bit 5,(iy+18h)
+	jr nz, battok
+	bcall(_clrLCDfull)
+	ld hl,0000
+	ld (curcol),hl
+	ld a,0
+	ld (currow),a
+	ld hl,battbad
+	jp jump
+battok:
+	bcall(_clrLCDfull)
+	ld hl,0000
+	ld (curcol),hl
+	ld a,0
+	ld (currow),a
+	ld hl,battokm
+	jp jump	
+contraster:
+  	bcall(_clrLCDFULL)            
+  	bcall(_GRBUFCLR)               
+  	ld a,44d
+  	ld (curcont),a
+  	ld a,(curcont)
+  	or 0C0h
+  	call lcd_busy
+  	out (LCDINSTPORT),a         ;make the contrast 44d (about half way)
+textdisp:                    
+  	ld a,14
+  	ld (PENROW),a
+  	ld a,20
+  	ld (PENCOL),a
+  	ld hl,wizstr
+  	bcall(_vputs)
+  	ld a,41
+  	ld (PENROW),a
+  	ld a,15
+  	ld (PENCOL),a
+  	ld hl,bystr
+  	bcall(_vputs)
+  	ld a,49
+  	ld (PENROW),a
+  	ld a,18
+  	ld (PENCOL),a
+  	ld hl,mailstr
+  	bcall(_vputs)
+mainloop:                    
+  	bcall(_getkey)
+  	cp kLeft
+  	jr z,less
+  	cp kRight
+  	jp z,more
+  	cp kEnter
+  	jp z,exit
+  	jr mainloop
+more:                        
+  	ld a,(curcont)
+  	cp 62d
+  	jp z,nomore
+  	ld a,(curcont)
+  	ld b,1d
+  	add a,b
+  	ld (curcont),a
+  	ld a,(curcont)
+  	or 0C0h
+  	call lcd_busy
+  	out (LCDINSTPORT),a
+  	inc a
+  	jp mainloop
+less:                           
+  	ld a,(curcont)
+  	cp 23d
+  	jr z,noless
+  	ld a,(curcont)
+  	ld b,1d
+  	sub b
+  	ld (curcont),a
+  	ld a,(curcont)
+  	or 0C0h
+  	call lcd_busy
+  	out (LCDINSTPORT),a
+  	dec a
+  	dec a
+  	ld c,a
+  	ld d,0
+  	dec a
+  	jp mainloop
+nomore:
+  	jp mainloop
+noless:
+  	jp mainloop
+exit:
+  	jp back
+lcd_busy:
+        push    af                     
+        inc     hl                     
+        dec     hl                      
+        pop     af                      
+        ret                             
+shutdown:
+	di
+	ld a,001h
+	out (003h),a
+	ld a,00h
+	out (004h),a
+	ex af,af'
+	exx
+	ei
+	ret        ;watch this code
+fakeclear:
+	bcall(_clrLCDfull)
+	bit shiftlwralph, (iy+shiftflags)
+	jp z,shiftback
+	res shiftlwralph, (iy+shiftflags)
+	bcall(_clrLCDfull)
+	ld hl,0000
+	ld (currow),hl
+	ld hl,lwrcase
+	jp jump
+shiftback:
+	set shiftlwralph, (iy+shiftflags)
+	bcall(_clrLCDfull)
+	ld hl,0000
+	ld (currow),hl
+	ld hl,lwrcaseoff
+	jp jump
+inverse:
+	bit textinverse, (iy+textflags)
+	jr z,setinverse
+	res textinverse, (iy+textflags)
+	bcall(_clrlcdfull)
+	ld hl,0000
+	ld (currow),hl
+	ld a,0
+	ld (curcol),a
+	ld hl,setfix
+	jp jump
+setinverse:
+	set textinverse, (iy+textflags)	
+	bcall(_clrLCDfull)
+	ld hl,0000
+	ld (currow),hl
+	ld a,0
+	ld (curcol),a
+	ld hl,inverset
+	jp jump
+indicator:
+	bit indicrun, (iy+indicflags)
+	jp z,indicon
+	res indicrun, (iy+indicflags)
+	ld hl,0000
+	ld (currow),hl
+	ld a,0
+	ld (curcol),a
+	bcall(_clrLCDfull)
+	ld hl,indicaoff
+	jp jump
+indicon:
+	set indicrun, (iy+indicflags)
+	ld hl,0000
+	ld (currow),hl
+	ld a,0
+	bcall(_clrLCDfull)	
+	ld (curcol),a
+	ld hl,indicontest
+	jp jump
+jump:
+	bcall(_puts)
+	bcall(_getkey)
+	jp back
+battbad:
+	.db "Change your Batteries!",0
+battokm:
+	.db "Batteries Fine!",0
+lwrcase:
+	.db "Lower Case OFF",0
+lwrcaseoff:
+	.db "Lower Case ON",0
+indicaoff:
+	.db "Run Indicator   Off",0
+indicontest:
+	.db "Run Indicator on",0
+setfix:
+	.db "Text Inverse Off",0
+quiter:
+        ret
+inverset:
+	.db "Text Inverse Set",0
+title:
+	.db "Controls Plus 1.1 MirageOS",0
+author:
+	.db "Written by: Peter",0
+lastname:
+	.db "Jedraszczak",0
+option1:
+	.db "1: Text Inverse",0 
+option2:
+	.db "2: Cursor",0
+option3:
+	.db "3: Run Indicator",0
+option4:
+	.db "4: Lower Case",0
+option5:
+	.db "5: Shut Off Calculator",0
+option6:
+	.db "6: Change Contrast",0
+battdial:
+	.db "7: Battery Check",0
+wizstr:
+        .db   "Contrast Settings",0
+bystr:
+        .db   "<-- Left Less Right More -->",0
+mailstr:
+        .db   "#Enter# Quits",0
+curson:
+	.db "Cursor Disabled",0
+cursoff:
+	.db "Cursor Enabled",0
+faker:
+	.db "8: Fake Clear",0
+teacher:
+	.db "Mem Cleared",0
+.end
+end
